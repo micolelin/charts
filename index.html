@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股每日快訊</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #fff;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.02em; }
+  header .subtitle { font-size: 0.8rem; color: #a0aec0; margin-top: 2px; }
+
+  .date-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 14px;
+  }
+  .date-bar label { font-size: 0.8rem; color: #a0aec0; white-space: nowrap; }
+  .date-bar select {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+  }
+  .date-bar select option { background: #1a1a2e; color: #fff; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
+  .card.wide { grid-column: 1 / -1; }
+
+  .card-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-header .icon { font-size: 1.1rem; }
+  .card-header .title { font-size: 0.9rem; font-weight: 600; color: #2d3748; }
+
+  .card img {
+    width: 100%;
+    display: block;
+    cursor: zoom-in;
+    transition: opacity 0.2s;
+  }
+  .card img.loading { opacity: 0.3; }
+
+  /* lightbox */
+  #lightbox {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #lightbox.show { display: flex; }
+  #lightbox img { max-width: 95vw; max-height: 90vh; border-radius: 8px; }
+  #lightbox .close {
+    position: fixed; top: 16px; right: 20px;
+    color: #fff; font-size: 2rem; cursor: pointer; line-height: 1;
+  }
+
+  .status { text-align: center; padding: 40px; color: #718096; font-size: 0.9rem; }
+  .updated { text-align: center; padding: 8px; font-size: 0.75rem; color: #a0aec0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📊 台股每日快訊</h1>
+    <div class="subtitle">資料來源：台灣證交所 / 櫃買中心</div>
+  </div>
+  <div class="date-bar">
+    <label>日期</label>
+    <select id="datePicker" onchange="loadDate(this.value)"></select>
+  </div>
+</header>
+
+<div id="grid" class="grid">
+  <div class="status">載入中…</div>
+</div>
+<div class="updated" id="updated"></div>
+
+<div id="lightbox" onclick="closeLightbox()">
+  <span class="close">✕</span>
+  <img id="lbImg" src="" alt="">
+</div>
+
+<script>
+const REPO = 'micolelin/charts';
+const RAW  = `https://raw.githubusercontent.com/${REPO}/main/`;
+const API  = `https://api.github.com/repos/${REPO}/contents/`;
+
+const CHARTS = [
+  { key: 'stock_updown', icon: '📈', title: '漲跌統計', wide: false },
+  { key: 'stock_inst',   icon: '🏦', title: '法人動向', wide: false },
+  { key: 'stock_volume', icon: '📊', title: '成交量',   wide: false },
+  { key: 'stock_chart',  icon: '🕯', title: '大盤走勢（ETF 比較）', wide: true },
+  { key: 'stock_table',  icon: '📋', title: '個股速覽', wide: true },
+];
+
+let allDates = [];
+
+async function init() {
+  try {
+    const res = await fetch(API);
+    const files = await res.json();
+    const pngFiles = files.filter(f => f.name.endsWith('.png'));
+
+    // 收集所有日期
+    const dateSet = new Set();
+    pngFiles.forEach(f => {
+      const m = f.name.match(/_(\d{8})\.png$/);
+      if (m) dateSet.add(m[1]);
+    });
+    allDates = [...dateSet].sort().reverse();
+
+    // 填下拉選單
+    const picker = document.getElementById('datePicker');
+    allDates.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}`;
+      if (i === 0) opt.selected = true;
+      picker.appendChild(opt);
+    });
+
+    loadDate(allDates[0]);
+  } catch (e) {
+    document.getElementById('grid').innerHTML = `<div class="status">⚠️ 載入失敗：${e.message}</div>`;
+  }
+}
+
+function loadDate(dateStr) {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  CHARTS.forEach(c => {
+    const fname = `${c.key}_${dateStr}.png`;
+    const url   = RAW + fname;
+
+    const card = document.createElement('div');
+    card.className = 'card' + (c.wide ? ' wide' : '');
+
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.innerHTML = `<span class="icon">${c.icon}</span><span class="title">${c.title}</span>`;
+
+    const img = document.createElement('img');
+    img.className = 'loading';
+    img.alt = c.title;
+    img.onload  = () => img.classList.remove('loading');
+    img.onerror = () => { img.style.display='none'; card.style.opacity='0.4'; };
+    img.onclick = () => openLightbox(url, c.title);
+    img.src = url;
+
+    card.appendChild(header);
+    card.appendChild(img);
+    grid.appendChild(card);
+  });
+
+  const d = dateStr;
+  document.getElementById('updated').textContent =
+    `資料日期：${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}　共 ${allDates.length} 個交易日`;
+}
+
+function openLightbox(src, alt) {
+  document.getElementById('lbImg').src = src;
+  document.getElementById('lbImg').alt = alt;
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+init();
+</script>
+</body>
+</html>

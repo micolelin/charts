@@ -3,119 +3,185 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>台股每日快訊</title>
+<title>台股快訊</title>
 <style>
+  :root {
+    --bg: #f0f2f5; --fg: #1a1a2e; --card: #ffffff; --muted: #6b7280;
+    --line: #e5e7eb; --up: #dc2626; --down: #16a34a; --accent: #1e40af;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a; --fg: #e2e8f0; --card: #1e293b; --muted: #94a3b8;
+      --line: #334155; --up: #f87171; --down: #4ade80; --accent: #60a5fa;
+    }
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a2e; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--fg);
+    overflow-x: hidden;
+  }
 
   header {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    color: #fff;
-    padding: 20px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    padding: 0.75rem 1rem;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.75rem; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 10;
   }
-  header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.02em; }
-  header .subtitle { font-size: 0.8rem; color: #a0aec0; margin-top: 2px; }
+  header h1 { font-size: 1.05rem; font-weight: 700; }
+  #datePicker {
+    background: var(--bg); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 0.5rem;
+    padding: 0.4rem 0.6rem; font-size: 0.95rem; font-weight: 600;
+  }
 
-  .date-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 8px;
-    padding: 8px 14px;
+  .tabs { display: flex; border-bottom: 1px solid var(--line); background: var(--card); }
+  .tabs button {
+    flex: 1; padding: 0.85rem 0.5rem;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--muted); font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; font-family: inherit;
   }
-  .date-bar label { font-size: 0.8rem; color: #a0aec0; white-space: nowrap; }
-  .date-bar select {
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    outline: none;
-  }
-  .date-bar select option { background: #1a1a2e; color: #fff; }
+  .tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 16px;
-    padding: 20px;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
+  .panel { padding: 1rem; max-width: 75rem; margin: 0 auto; }
+  .panel[hidden] { display: none; }
+
+  #status { padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.9rem; }
+  #status:empty { display: none; }
 
   .card {
-    background: #fff;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transition: transform 0.15s, box-shadow 0.15s;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 0.75rem; overflow: hidden; margin-bottom: 1rem;
   }
-  .card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
-  .card.wide { grid-column: 1 / -1; }
-
   .card-header {
-    padding: 12px 16px;
-    border-bottom: 1px solid #f0f0f0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    padding: 0.75rem 1rem; border-bottom: 1px solid var(--line);
+    font-size: 0.9rem; font-weight: 600;
   }
-  .card-header .icon { font-size: 1.1rem; }
-  .card-header .title { font-size: 0.9rem; font-weight: 600; color: #2d3748; }
 
-  .card img {
-    width: 100%;
-    display: block;
-    cursor: zoom-in;
-    transition: opacity 0.2s;
+  /* 個股速覽：寬螢幕是表格，窄螢幕一檔一張卡片。
+     沿用 biweekly/render.py 已驗證過的做法：td 用 data-label 帶出欄位名。 */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.75rem; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { background: var(--accent); color: #fff; font-weight: 600; }
+  tbody tr { border-bottom: 1px solid var(--line); }
+  .chg { font-weight: 700; }
+  .chg.is-up { color: var(--up); }
+  .chg.is-down { color: var(--down); }
+  .code { color: var(--muted); font-size: 0.8rem; margin-left: 0.35rem; }
+
+  @media (max-width: 40rem) {
+    /* 窄螢幕一檔一張卡片，三行擺完：名稱 ／ 最新收＋漲跌幅 ／ 前收高低。
+       攤成五行雖然也讀得懂，但 9 檔就要捲四千像素，不算舒適。 */
+    table, tbody, td { display: block; width: 100%; }
+    thead { display: none; }
+    tbody tr {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0.1rem 0.5rem; align-items: baseline;
+      border: 1px solid var(--line); border-radius: 0.75rem;
+      padding: 0.7rem 0.85rem; margin-bottom: 0.6rem; background: var(--card);
+    }
+    td { text-align: left; padding: 0; white-space: normal; }
+    td:nth-child(1) {
+      grid-column: 1 / -1; font-weight: 700; font-size: 1.05rem;
+      padding-bottom: 0.35rem;
+    }
+    td:nth-child(2) { grid-column: 1 / 3; font-size: 1.35rem; font-weight: 700; }
+    td:nth-child(3) { text-align: right; font-size: 1.15rem; }
+    td:nth-child(n+4) {
+      margin-top: 0.5rem; font-size: 0.78rem; color: var(--muted);
+    }
+    td[data-label]::before {
+      content: attr(data-label);
+      display: block; font-size: 0.7rem; color: var(--muted);
+      font-weight: 600; margin-bottom: 0.1rem;
+    }
+    td:nth-child(3)::before { text-align: right; }
   }
-  .card img.loading { opacity: 0.3; }
 
-  /* lightbox */
+  .chart-card img { width: 100%; display: block; cursor: zoom-in; }
   #lightbox {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.88);
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0, 0, 0, 0.9);
+    align-items: center; justify-content: center;
+    overflow: auto; touch-action: pinch-zoom;
   }
   #lightbox.show { display: flex; }
-  #lightbox img { max-width: 95vw; max-height: 90vh; border-radius: 8px; }
+  #lightbox img { max-width: 100%; max-height: 100%; }
   #lightbox .close {
-    position: fixed; top: 16px; right: 20px;
-    color: #fff; font-size: 2rem; cursor: pointer; line-height: 1;
+    position: fixed; top: 0.75rem; right: 1rem;
+    color: #fff; font-size: 2rem; line-height: 1; cursor: pointer;
   }
 
-  .status { text-align: center; padding: 40px; color: #718096; font-size: 0.9rem; }
-  .updated { text-align: center; padding: 8px; font-size: 0.75rem; color: #a0aec0; }
+  .tier { margin-bottom: 1.25rem; }
+  .tier-name {
+    font-size: 0.95rem; font-weight: 700; color: var(--accent);
+    margin-bottom: 0.5rem; padding-left: 0.25rem;
+  }
+  .pick-card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 0.75rem; padding: 0.9rem; margin-bottom: 0.75rem;
+  }
+  .pick-head {
+    display: flex; align-items: baseline; gap: 0.5rem;
+    font-size: 1.1rem; font-weight: 700; margin-bottom: 0.6rem;
+  }
+  .pick-head .market { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+  .pick-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem 1rem; font-size: 0.9rem;
+  }
+  .pick-grid dt { color: var(--muted); font-size: 0.8rem; }
+  .pick-grid dd { font-weight: 600; margin-bottom: 0.4rem; }
+  .reason-toggle {
+    margin-top: 0.6rem; background: none; border: none; padding: 0;
+    color: var(--accent); font-size: 0.85rem; font-family: inherit; cursor: pointer;
+  }
+  .reason-body {
+    margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted); line-height: 1.7;
+  }
+  .reason-body[hidden] { display: none; }
+
+  #pass-form { max-width: 22rem; margin: 2rem auto; text-align: center; }
+  #pass-form p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  #pass-input {
+    width: 100%; padding: 0.7rem; font-size: 1rem;
+    border: 1px solid var(--line); border-radius: 0.5rem;
+    background: var(--card); color: var(--fg);
+  }
+  #pass-submit {
+    width: 100%; margin-top: 0.75rem; padding: 0.7rem;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 0.5rem; font-size: 1rem; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+  }
+  #pass-error { color: var(--up); font-size: 0.85rem; margin-top: 0.75rem; min-height: 1.2em; }
+  #pass-clear {
+    display: block; margin: 1rem auto 0; background: none; border: none;
+    color: var(--muted); font-size: 0.8rem; font-family: inherit;
+    text-decoration: underline; cursor: pointer;
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>📊 台股每日快訊</h1>
-    <div class="subtitle">資料來源：台灣證交所 / 櫃買中心</div>
-  </div>
-  <div class="date-bar">
-    <label>日期</label>
-    <select id="datePicker" onchange="loadDate(this.value)"></select>
-  </div>
+  <h1>📊 台股快訊</h1>
+  <select id="datePicker" aria-label="日期"></select>
 </header>
 
-<div id="grid" class="grid">
-  <div class="status">載入中…</div>
+<div class="tabs" role="tablist">
+  <button id="tab-daily" role="tab" aria-selected="true">每日快訊</button>
+  <button id="tab-picks" role="tab" aria-selected="false">精選選股</button>
 </div>
-<div class="updated" id="updated"></div>
+
+<div id="status"></div>
+<div id="panel-daily" class="panel"></div>
+<div id="panel-picks" class="panel" hidden></div>
 
 <div id="lightbox" onclick="closeLightbox()">
   <span class="close">✕</span>
@@ -123,92 +189,298 @@
 </div>
 
 <script>
-const REPO = 'micolelin/charts';
-const RAW  = `https://raw.githubusercontent.com/${REPO}/main/`;
-const API  = `https://api.github.com/repos/${REPO}/contents/`;
+const BASE = window.__DASHBOARD_BASE__
+  || 'https://raw.githubusercontent.com/micolelin/charts/main/';
 
-const CHARTS = [
-  { key: 'stock_updown', icon: '📈', title: '漲跌統計', wide: false },
-  { key: 'stock_inst',   icon: '🏦', title: '法人動向', wide: false },
-  { key: 'stock_volume', icon: '📊', title: '成交量',   wide: false },
-  { key: 'stock_chart',  icon: '🕯', title: '大盤走勢（ETF 比較）', wide: true },
-  { key: 'stock_table',  icon: '📋', title: '個股速覽', wide: true },
-];
+let manifest = null;
+let currentTab = 'daily';
 
-let allDates = [];
+const $ = id => document.getElementById(id);
+const setStatus = text => { $('status').textContent = text; };
 
-async function init() {
-  try {
-    const res = await fetch(API);
-    const files = await res.json();
-    const pngFiles = files.filter(f => f.name.endsWith('.png'));
+function fmtDate(d) {
+  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+}
 
-    // 收集所有日期
-    const dateSet = new Set();
-    pngFiles.forEach(f => {
-      const m = f.name.match(/_(\d{8})\.png$/);
-      if (m) dateSet.add(m[1]);
-    });
-    allDates = [...dateSet].sort().reverse();
+/** 目前頁籤對應的日期清單。每日是字串陣列，選股是物件陣列，統一取出日期。 */
+function datesForTab(tab) {
+  if (!manifest) return [];
+  return tab === 'daily'
+    ? manifest.daily
+    : manifest.picks.map(p => p.date);
+}
 
-    // 填下拉選單
-    const picker = document.getElementById('datePicker');
-    allDates.forEach((d, i) => {
-      const opt = document.createElement('option');
-      opt.value = d;
-      opt.textContent = `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}`;
-      if (i === 0) opt.selected = true;
-      picker.appendChild(opt);
-    });
-
-    loadDate(allDates[0]);
-  } catch (e) {
-    document.getElementById('grid').innerHTML = `<div class="status">⚠️ 載入失敗：${e.message}</div>`;
+function fillDatePicker() {
+  const picker = $('datePicker');
+  picker.innerHTML = '';
+  for (const d of datesForTab(currentTab)) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = fmtDate(d);
+    picker.appendChild(opt);
   }
 }
 
-function loadDate(dateStr) {
-  const grid = document.getElementById('grid');
-  grid.innerHTML = '';
-
-  CHARTS.forEach(c => {
-    const fname = `${c.key}_${dateStr}.png`;
-    const url   = RAW + fname;
-
-    const card = document.createElement('div');
-    card.className = 'card' + (c.wide ? ' wide' : '');
-
-    const header = document.createElement('div');
-    header.className = 'card-header';
-    header.innerHTML = `<span class="icon">${c.icon}</span><span class="title">${c.title}</span>`;
-
-    const img = document.createElement('img');
-    img.className = 'loading';
-    img.alt = c.title;
-    img.onload  = () => img.classList.remove('loading');
-    img.onerror = () => { img.style.display='none'; card.style.opacity='0.4'; };
-    img.onclick = () => openLightbox(url, c.title);
-    img.src = url;
-
-    card.appendChild(header);
-    card.appendChild(img);
-    grid.appendChild(card);
-  });
-
-  const d = dateStr;
-  document.getElementById('updated').textContent =
-    `資料日期：${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}　共 ${allDates.length} 個交易日`;
+function switchTab(tab) {
+  currentTab = tab;
+  $('tab-daily').setAttribute('aria-selected', String(tab === 'daily'));
+  $('tab-picks').setAttribute('aria-selected', String(tab === 'picks'));
+  $('panel-daily').hidden = tab !== 'daily';
+  $('panel-picks').hidden = tab !== 'picks';
+  fillDatePicker();
+  render();
 }
 
-function openLightbox(src, alt) {
-  document.getElementById('lbImg').src = src;
-  document.getElementById('lbImg').alt = alt;
-  document.getElementById('lightbox').classList.add('show');
+function render() {
+  const date = $('datePicker').value;
+  if (!date) {
+    setStatus(currentTab === 'daily' ? '還沒有每日資料' : '還沒有選股資料');
+    return;
+  }
+  setStatus('');
+  if (currentTab === 'daily') renderDaily(date);
+  else renderPicks(date);
+}
+
+const CHART_META = {
+  stock_updown: { icon: '📈', title: '漲跌統計' },
+  stock_inst:   { icon: '🏦', title: '法人動向' },
+  stock_volume: { icon: '📊', title: '成交量' },
+  stock_chart:  { icon: '🕯', title: '大盤走勢（ETF 比較）' },
+};
+
+// 最新收與漲跌幅擺前面：手機上第一眼要看到的是這兩個
+// 第三欄是 data-label（窄螢幕用的短標籤），寬螢幕表頭用第二欄的完整名稱
+const COLUMNS = [
+  ['close', '最新收', '最新收'],
+  ['prev', '14日前收', '前收'],
+  ['high', '14日高', '高'],
+  ['low', '14日低', '低'],
+];
+
+function chgSpan(pct) {
+  const sign = pct >= 0 ? '+' : '';
+  const cls = pct >= 0 ? 'is-up' : 'is-down';
+  return `<span class="chg ${cls}">${sign}${pct.toFixed(1)}%</span>`;
+}
+
+function tableHTML(rows) {
+  const [closeCol, ...restCols] = COLUMNS;
+  const head = [closeCol, ['chg', '漲跌幅'], ...restCols]
+    .map(([, label]) => `<th>${label}</th>`).join('');
+
+  const body = rows.map(r => {
+    const name = r.code
+      ? `${r.name}<span class="code">${r.code}</span>`
+      : r.name;
+    const cell = ([key, , short]) => `<td data-label="${short}">${r[key]}</td>`;
+    const rest = restCols.map(cell).join('');
+    return `<tr>
+      <td>${name}</td>
+      ${cell(closeCol)}
+      <td data-label="漲跌幅">${chgSpan(r.chg_pct)}</td>
+      ${rest}
+    </tr>`;
+  }).join('');
+
+  return `<table id="daily-table">
+    <thead><tr><th>名稱</th>${head}</tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+
+function chartCardHTML(key, date) {
+  const meta = CHART_META[key];
+  if (!meta) return '';
+  const url = `${BASE}${key}_${date}.png`;
+  // onerror 隱藏整張卡：舊日期沒有 JSON 只能猜圖檔名，猜錯的不要留空殼在畫面上
+  return `<div class="card chart-card">
+    <div class="card-header">${meta.icon} ${meta.title}</div>
+    <img src="${url}" alt="${meta.title}" onclick="openLightbox('${url}')"
+         onerror="this.closest('.chart-card').remove()">
+  </div>`;
+}
+
+/** 沒有 daily JSON 的舊日期：把所有已知圖表都試畫一次，載不到的自己消失。 */
+function chartsOnlyHTML(date) {
+  const charts = Object.keys(CHART_META).map(k => chartCardHTML(k, date)).join('');
+  return `<div id="status-daily" style="padding:0 0 0.75rem;color:var(--muted);font-size:0.85rem">
+    這天只有圖表，沒有文字版個股速覽
+  </div>${charts}`;
+}
+
+async function renderDaily(date) {
+  const panel = $('panel-daily');
+  panel.innerHTML = '<div id="status-daily">載入中…</div>';
+  try {
+    const res = await fetch(`${BASE}data/daily_${date}.json`, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const daily = await res.json();
+    const charts = daily.charts
+      .filter(k => k !== 'stock_table')   // 表格已改成 HTML，不再顯示舊圖
+      .map(k => chartCardHTML(k, date))
+      .join('');
+    panel.innerHTML = `
+      <div class="card">
+        <div class="card-header">📋 個股速覽　<span style="color:var(--muted);font-weight:400">${daily.table.note}</span></div>
+        <div class="table-wrap">${tableHTML(daily.table.rows)}</div>
+      </div>
+      ${charts}`;
+  } catch (e) {
+    panel.innerHTML = chartsOnlyHTML(date);
+  }
+}
+
+function openLightbox(src) {
+  $('lbImg').src = src;
+  $('lightbox').classList.add('show');
 }
 function closeLightbox() {
-  document.getElementById('lightbox').classList.remove('show');
+  $('lightbox').classList.remove('show');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+const PASS_KEY = 'dash_pass';
+
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+/** 參數必須與 codelist/dashboard/crypto.py 完全一致，改一邊就要改另一邊。 */
+async function decryptEnvelope(envelope, passphrase) {
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']
+  );
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: b64(envelope.salt), iterations: envelope.iter, hash: 'SHA-256' },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: b64(envelope.iv) }, key, b64(envelope.ct)
+  );
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+const FIELDS = [
+  ['price', '現價', v => v],
+  ['entry', '建議進場', v => v],
+  ['stop', '停損', (v, item) => item.stop_pct != null ? `${v}（${item.stop_pct}%）` : v],
+  ['target_low', '目標區間', (v, item) => item.target_high != null ? `${v} ~ ${item.target_high}` : v],
+  ['upside_low', '預期漲幅', (v, item) => item.upside_high != null ? `+${v}% ~ +${item.upside_high}%` : `+${v}%`],
+  ['rr', '風報比', v => v],
+];
+
+function pickCardHTML(item, index) {
+  const rows = FIELDS
+    .filter(([key]) => item[key] != null)
+    .map(([key, label, fmt]) => `<dt>${label}</dt><dd>${fmt(item[key], item)}</dd>`)
+    .join('');
+  const reason = item.reason
+    ? `<button class="reason-toggle" onclick="toggleReason(${index})">選入理由 ▾</button>
+       <div class="reason-body" id="reason-${index}" hidden>${item.reason}</div>`
+    : '';
+  const highlights = item.highlights
+    ? `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">${item.highlights}</div>`
+    : '';
+  return `<div class="pick-card">
+    <div class="pick-head">
+      <span>${item.code} ${item.name}</span>
+      ${item.market ? `<span class="market">${item.market}</span>` : ''}
+    </div>
+    ${highlights}
+    <dl class="pick-grid">${rows}</dl>
+    ${reason}
+  </div>`;
+}
+
+function toggleReason(index) {
+  const body = $(`reason-${index}`);
+  body.hidden = !body.hidden;
+}
+
+function picksHTML(picks) {
+  let index = 0;
+  const tiers = picks.tiers.map(tier => {
+    const cards = tier.items.map(item => pickCardHTML(item, index++)).join('');
+    return `<div class="tier"><div class="tier-name">${tier.name}</div>${cards}</div>`;
+  }).join('');
+  return `${tiers}
+    <button id="pass-clear" onclick="clearPass()">清除密碼</button>`;
+}
+
+function passFormHTML(message) {
+  return `<div id="pass-form">
+    <p>選股資料經過加密，請輸入密碼解鎖。</p>
+    <input id="pass-input" type="password" autocomplete="current-password" placeholder="密碼">
+    <button id="pass-submit">解鎖</button>
+    <div id="pass-error">${message || ''}</div>
+  </div>`;
+}
+
+function showPassForm(date, message) {
+  $('panel-picks').innerHTML = passFormHTML(message);
+  const submit = async () => {
+    $('pass-error').textContent = '解密中…';
+    if (!await tryUnlock(date, $('pass-input').value)) {
+      $('pass-error').textContent = '密碼錯誤或資料損毀';
+    }
+  };
+  $('pass-submit').onclick = submit;
+  $('pass-input').onkeydown = e => { if (e.key === 'Enter') submit(); };
+}
+
+function clearPass() {
+  localStorage.removeItem(PASS_KEY);
+  render();
+}
+
+/** 解得開就記住密碼並畫出來，解不開就把記住的密碼清掉。回傳是否成功。 */
+async function tryUnlock(date, passphrase) {
+  if (!passphrase) return false;
+  try {
+    const res = await fetch(`${BASE}data/picks_${date}.enc.json`, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const picks = await decryptEnvelope(await res.json(), passphrase);
+    localStorage.setItem(PASS_KEY, passphrase);
+    $('panel-picks').innerHTML = picksHTML(picks);
+    return true;
+  } catch (e) {
+    localStorage.removeItem(PASS_KEY);
+    return false;
+  }
+}
+
+async function renderPicks(date) {
+  const saved = localStorage.getItem(PASS_KEY);
+  if (!saved) {
+    showPassForm(date, '');
+    return;
+  }
+  $('panel-picks').innerHTML =
+    '<div style="text-align:center;padding:2rem;color:var(--muted)">解密中…</div>';
+  // 記住的密碼解不開，多半是換過密碼，清掉重問
+  if (!await tryUnlock(date, saved)) showPassForm(date, '密碼錯誤或資料損毀');
+}
+
+async function init() {
+  setStatus('載入中…');
+  try {
+    const res = await fetch(BASE + 'data/manifest.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    manifest = await res.json();
+  } catch (e) {
+    setStatus(`⚠️ 讀不到資料清單（${e.message}）。請確認排程是否正常執行。`);
+    return;
+  }
+  setStatus('');
+  fillDatePicker();
+  render();
+}
+
+$('tab-daily').onclick = () => switchTab('daily');
+$('tab-picks').onclick = () => switchTab('picks');
+$('datePicker').onchange = render;
 
 init();
 </script>

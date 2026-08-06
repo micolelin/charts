@@ -301,12 +301,19 @@ function chartCardHTML(key, date) {
   </div>`;
 }
 
-/** 沒有 daily JSON 的舊日期：把所有已知圖表都試畫一次，載不到的自己消失。 */
+/** 所有已知圖表都試畫一次，載不到的自己消失。
+
+   刻意不看 daily JSON 裡的 charts 清單：那份清單只記錄「這次跑成功了哪幾張」，
+   拿它當有無的依據，會讓補發過資料的日期整排圖表憑空消失。 */
+function allChartsHTML(date) {
+  return Object.keys(CHART_META).map(k => chartCardHTML(k, date)).join('');
+}
+
+/** 沒有 daily JSON 的舊日期：只有圖表，沒有文字版速覽。 */
 function chartsOnlyHTML(date) {
-  const charts = Object.keys(CHART_META).map(k => chartCardHTML(k, date)).join('');
   return `<div id="status-daily" style="padding:0 0 0.75rem;color:var(--muted);font-size:0.85rem">
     這天只有圖表，沒有文字版個股速覽
-  </div>${charts}`;
+  </div>${allChartsHTML(date)}`;
 }
 
 async function renderDaily(date) {
@@ -316,16 +323,12 @@ async function renderDaily(date) {
     const res = await fetch(`${BASE}data/daily_${date}.json`, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const daily = await res.json();
-    const charts = daily.charts
-      .filter(k => k !== 'stock_table')   // 表格已改成 HTML，不再顯示舊圖
-      .map(k => chartCardHTML(k, date))
-      .join('');
     panel.innerHTML = `
       <div class="card">
         <div class="card-header">📋 個股速覽　<span style="color:var(--muted);font-weight:400">${daily.table.note}</span></div>
         <div class="table-wrap">${tableHTML(daily.table.rows)}</div>
       </div>
-      ${charts}`;
+      ${allChartsHTML(date)}`;
   } catch (e) {
     panel.innerHTML = chartsOnlyHTML(date);
   }

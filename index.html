@@ -119,9 +119,16 @@
 
   .tier { margin-bottom: 1.25rem; }
   .tier-name {
+    display: flex; align-items: center; gap: 0.5rem;
     font-size: 0.95rem; font-weight: 700; color: var(--accent);
-    margin-bottom: 0.5rem; padding-left: 0.25rem;
+    margin-bottom: 0.5rem; padding: 0.6rem 0.75rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 0.5rem;
+    cursor: pointer; list-style: none;
   }
+  .tier-name::-webkit-details-marker { display: none; }
+  .tier-name::before { content: "▸"; font-size: 0.8rem; }
+  .tier[open] > .tier-name::before { content: "▾"; }
+  .tier-count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 0.8rem; }
   .pick-card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 0.75rem; padding: 0.9rem; margin-bottom: 0.75rem;
@@ -404,9 +411,13 @@ function toggleReason(index) {
 
 function picksHTML(picks) {
   let index = 0;
-  const tiers = picks.tiers.map(tier => {
+  // 只展開第一梯隊：一份動輒兩三百檔，全部攤開要滑很久才看得到第二梯隊在哪
+  const tiers = picks.tiers.map((tier, i) => {
     const cards = tier.items.map(item => pickCardHTML(item, index++)).join('');
-    return `<div class="tier"><div class="tier-name">${tier.name}</div>${cards}</div>`;
+    return `<details class="tier"${i === 0 ? ' open' : ''}>
+      <summary class="tier-name">${tier.name}<span class="tier-count">${tier.items.length} 檔</span></summary>
+      ${cards}
+    </details>`;
   }).join('');
   return `${tiers}
     <button id="pass-clear" onclick="clearPass()">清除密碼</button>`;

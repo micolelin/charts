@@ -398,6 +398,7 @@ function pickCardHTML(item, index) {
   return `<div class="pick-card">
     <div class="pick-head">
       <span>${item.code} ${item.name}</span>
+      ${item.industry ? `<span class="market">${item.industry}</span>` : ''}
       ${item.market ? `<span class="market">${item.market}</span>` : ''}
     </div>
     ${highlights}
@@ -422,7 +423,13 @@ function picksHTML(picks) {
       ${cards}
     </details>`;
   }).join('');
-  return `${tiers}
+  // 大盤說明：空頭時清單會收斂成一半，沒有這行只會覺得「今天怎麼比較少」
+  const note = picks.market_note
+    ? `<div style="padding:0.5rem 0.7rem;margin-bottom:0.75rem;border-radius:6px;
+         background:var(--card);border:1px solid var(--line);
+         color:var(--muted);font-size:0.82rem">${picks.market_note}</div>`
+    : '';
+  return `${note}${tiers}
     <button id="pass-clear" onclick="clearPass()">清除密碼</button>`;
 }
 

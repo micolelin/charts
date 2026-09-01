@@ -376,9 +376,11 @@ const FIELDS = [
   ['price', '現價', v => v],
   ['entry', '建議進場', v => v],
   ['stop', '停損', (v, item) => item.stop_pct != null ? `${v}（${item.stop_pct}%）` : v],
+  ['target_1m', '1個月目標', v => v],
   ['target_low', '目標區間', (v, item) => item.target_high != null ? `${v} ~ ${item.target_high}` : v],
   ['upside_low', '預期漲幅', (v, item) => item.upside_high != null ? `+${v}% ~ +${item.upside_high}%` : `+${v}%`],
   ['rr', '風報比', v => v],
+  ['ex_date', '除息日', v => v],
 ];
 
 function pickCardHTML(item, index) {
@@ -411,10 +413,11 @@ function toggleReason(index) {
 
 function picksHTML(picks) {
   let index = 0;
-  // 只展開第一梯隊：一份動輒兩三百檔，全部攤開要滑很久才看得到第二梯隊在哪
+  // 梯隊全部展開。以前一份動輒兩三百檔才只開第一隊，現在上限 30 檔、
+  // 只有第一二梯隊，全開反而好比較
   const tiers = picks.tiers.map((tier, i) => {
     const cards = tier.items.map(item => pickCardHTML(item, index++)).join('');
-    return `<details class="tier"${i === 0 ? ' open' : ''}>
+    return `<details class="tier" open>
       <summary class="tier-name">${tier.name}<span class="tier-count">${tier.items.length} 檔</span></summary>
       ${cards}
     </details>`;
